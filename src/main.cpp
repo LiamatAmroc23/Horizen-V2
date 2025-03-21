@@ -87,7 +87,6 @@ void setup() {
   gtime = millis(); // Initialize gtime with millis()
 
   adr = 4; // Initialize adr with 4
-  writeFloatToEEPROM(0, 0); // Write 0 to EEPROM address 0
 
   if (readFloatFromEEPROM(0) != 0) {
     logging = true;
@@ -95,6 +94,7 @@ void setup() {
     Serial.println("Previous flight detected");
     Serial.print("Apogee: ");
     Serial.println(apg);
+    led(75, 3);
   }
 
 }
@@ -130,15 +130,20 @@ void writeFloatToEEPROM(int address, float value) {
 
 void clearEEPROM() {
   byte zeros[32] = {0}; // Buffer of 32 zeros
-  for (int i = 0; i < 40000; i += 32) { // Assuming 32KB EEPROM
+  for (int i = 0; i < 100000; i += 32) { // Assuming 32KB EEPROM
     eeprom.write(i, zeros, 32); // Write 32 zeros at a time
      // Yield to prevent watchdog timer reset
      Serial.println(i);
+     if (readFloatFromEEPROM(i) == 0)
+     {
+      break;
+     }
+     
      delay(10);
   }
 }
 
-void split(int num) {
+int split(int num) {
   num = (int)num;
   int va = num;
   int v = 0;
@@ -159,6 +164,8 @@ void split(int num) {
     narray[v] = array[d];
     v += 1; // Increment v to fill narray correctly
   }
+  return num;
+
 }
 
 void pulse() {
@@ -222,12 +229,10 @@ bool landDetect() {
     {
        l += 1;
           if(l >= 20) {
-          land = true;
-          return land;
+          return true;
           }
           else {
-           land = false;
-           return land;
+            return false;
           }
          delay(500);
       
@@ -236,9 +241,9 @@ bool landDetect() {
   else {
     g += 1;
     delay(1);
-    land = false;
-    return land;
+    return false;
   }
+  return false;
 }
 
 float altRead(int amt) {
@@ -256,6 +261,13 @@ void loop() {
   if (logging) {
     print();
   }
+  if (landDetect() == true) {
+    led(100, 4);
+    split(apg);
+    while(1) {
+      pulse();
+    }
+  }
 
   unsigned long curtime = millis();
   float elapsed = (curtime - gtime) / 1000.0;
@@ -264,7 +276,7 @@ void loop() {
   writeFloatToEEPROM(adr, altRead(10));
   delay(10);
   writeFloatToEEPROM(tadr, elapsed);
-  
+
   apgDetect();
   landDetect();
 
@@ -273,6 +285,15 @@ void loop() {
   Serial.print(adr);
   Serial.print(", ");
   Serial.println(readFloatFromEEPROM(adr));
+
+  if (analogRead(but) > 500) {
+    apogee = true;
+    apg = 2564;
+    delay(20);
+    writeFloatToEEPROM(0, apg);
+    Serial.println("Simulated apogee");
+    led(200, 3);
+  }
 
   adr += 8;
   led(20, 1);
