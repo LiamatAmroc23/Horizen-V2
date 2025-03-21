@@ -204,6 +204,14 @@ void print() {
         led(20, 1); 
     
    }
+   led(1000, 1);
+   while (analogRead(but) < 500)
+   {
+      pulse();
+   }
+   
+
+   
     digitalWrite(LED, HIGH);
     delay(20);
     clearEEPROM();
@@ -286,14 +294,14 @@ void loop() {
   Serial.print(", ");
   Serial.println(readFloatFromEEPROM(adr));
 
-  // if (analogRead(but) > 500) {
-  //   apogee = true;
-  //   apg = 2564;
-  //   delay(20);
-  //   writeFloatToEEPROM(0, apg);
-  //   Serial.println("Simulated apogee");
-  //   led(200, 3);
-  // }
+  if (analogRead(but) > 500) {
+    apogee = true;
+    apg = 2564;
+    delay(20);
+    writeFloatToEEPROM(0, apg);
+    Serial.println("Simulated apogee");
+    led(200, 3);
+  }
 
   adr += 8;
   led(20, 1);
