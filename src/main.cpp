@@ -11,14 +11,20 @@ void apgDetect();
 float readFloatFromEEPROM(int address);
 void writeFloatToEEPROM(int address, float value);
 void clearEEPROM();
+bool landDetect();
 
 int i; // general for loop usage
+int bt; // button state
 int d;
+int l;
+int g;
 int dg; // amount of digits in the split int
 
 int zero = 0; // Starting altitude
 int cur = 0; // Variables for sensing apogee
 int pre = 0;
+
+int butt = 0; // Button state
 
 int apg = 0; // Apogee altitude
 
@@ -36,15 +42,13 @@ int state[5]; // Array for storing the state of the rocket
 float value;
 
 bool apogee = false; // Apogee detection
-bool deploy = false; // Deployment detection
 bool land = false; // Landing detection
-bool armed = false; // Arming detection
 bool logging = false; // Logging detection
 
 const int LED = 14; // LED pin
 const int but = 0; // Button pin
 
-const int apgthres = 200; // Altitude at which apogee starts being detected
+const int apgthres = 40; // Altitude at which apogee starts being detected
 
 Adafruit_BMP280 bmp;
 AT24C256 eeprom(0x50);
@@ -93,8 +97,6 @@ void setup() {
     Serial.println(apg);
   }
 
-  // Clear EEPROM at the start
-  clearEEPROM();
 }
 
 void led(int del, int amt) {
@@ -111,46 +113,33 @@ void led(int del, int amt) {
 float readFloatFromEEPROM(int address) {
   byte data[4];
   eeprom.read(address, data, 4); // Read 4 bytes from EEPROM
-  Serial.print("Raw data read from EEPROM at address ");
-  Serial.print(address);
-  Serial.print(": ");
-  for (int i = 0; i < 4; i++) {
-    Serial.print(data[i], HEX);
-    Serial.print(" ");
-  }
-  Serial.println();
   float value;
   memcpy(&value, data, sizeof(value));
-  Serial.print("Read from EEPROM at address ");
-  Serial.print(address);
-  Serial.print(": ");
-  Serial.println(value, 6); // Print with 6 decimal places for precision
   return value;
 }
 
 void writeFloatToEEPROM(int address, float value) {
   byte data[4];
-  if (address + 4 > 32768) { // Assuming 32KB EEPROM
+  if (address + 4 > 255000) { // Assuming 32KB EEPROM
     Serial.println("Error: EEPROM address out of bounds");
     return; // Don't write beyond the end of EEPROM
   }
   memcpy(data, &value, sizeof(value));
   eeprom.write(address, data, 4); // Write 4 bytes to EEPROM
-  Serial.print("Written to EEPROM at address ");
-  Serial.print(address);
-  Serial.print(": ");
-  Serial.println(value, 6); // Print with 6 decimal places for precision
 }
 
 void clearEEPROM() {
   byte zeros[32] = {0}; // Buffer of 32 zeros
-  for (int i = 0; i < 32768; i += 32) { // Assuming 32KB EEPROM
+  for (int i = 0; i < 40000; i += 32) { // Assuming 32KB EEPROM
     eeprom.write(i, zeros, 32); // Write 32 zeros at a time
-    yield(); // Yield to prevent watchdog timer reset
+     // Yield to prevent watchdog timer reset
+     Serial.println(i);
+     delay(10);
   }
 }
 
 void split(int num) {
+  num = (int)num;
   int va = num;
   int v = 0;
   i = 0;
@@ -196,25 +185,23 @@ void pulse() {
 }
 
 void print() {
-  int k = 4;
   split(apg);
-  while (analogRead(but) < 500) {
-    value = readFloatFromEEPROM(k);
-    k += 4;
-    Serial.println(value);
-    if (value == 0) {
-      k = 4;
-    }
-    led(50, 1);
-    //pulse();
-  }
-  while (1) {
+    while(analogRead(but) < 500) {
+        tadr = adr + 4;
+
+        Serial.print(readFloatFromEEPROM(tadr));
+        Serial.print(", ");
+        Serial.println(readFloatFromEEPROM(adr));
+          
+        adr += 8;   
+        led(20, 1); 
+    
+   }
     digitalWrite(LED, HIGH);
     delay(20);
     clearEEPROM();
     digitalWrite(LED, LOW);
     while(1);
-  }
 }
 
 void apgDetect() {
@@ -228,6 +215,30 @@ void apgDetect() {
     led(200, 3);
   }
   pre = cur;
+}
+bool landDetect() {
+  if (g >= 500) {
+    if (cur < 20 && apogee)
+    {
+       l += 1;
+          if(l >= 20) {
+          land = true;
+          return land;
+          }
+          else {
+           land = false;
+           return land;
+          }
+         delay(500);
+      
+    }
+  }
+  else {
+    g += 1;
+    delay(1);
+    land = false;
+    return land;
+  }
 }
 
 float altRead(int amt) {
@@ -250,21 +261,12 @@ void loop() {
   float elapsed = (curtime - gtime) / 1000.0;
   tadr = adr + 4;
 
-  // Debugging statements
-  Serial.print("Writing altitude to EEPROM at address: ");
-  Serial.println(adr);
-  Serial.print("Writing elapsed time to EEPROM at address: ");
-  Serial.println(tadr);
-
   writeFloatToEEPROM(adr, altRead(10));
+  delay(10);
   writeFloatToEEPROM(tadr, elapsed);
+  
   apgDetect();
-
-  // Debugging statements
-  Serial.print("Reading elapsed time from EEPROM at address: ");
-  Serial.println(tadr);
-  Serial.print("Reading altitude from EEPROM at address: ");
-  Serial.println(adr);
+  landDetect();
 
   Serial.print(readFloatFromEEPROM(tadr));
   Serial.print(", ");
@@ -273,6 +275,5 @@ void loop() {
   Serial.println(readFloatFromEEPROM(adr));
 
   adr += 8;
-  delay(20);
   led(20, 1);
 }
